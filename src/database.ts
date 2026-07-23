@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import type { AppData } from './types.js';
+import type { AppData, Project, Version, Requirement } from './types.js';
 import { appDataSchema } from './schemas.js';
 
 const EMPTY_DATA: AppData = {
@@ -17,6 +17,40 @@ export interface SnapshotInfo {
   createdAt: number;
   reason: string;
   requirementCount: number;
+}
+
+export interface ProjectSyncPayload {
+  projectId: string;
+  project: Project | null;
+  versions: Version[];
+  requirements: Requirement[];
+  dataVersion: string;
+  exportedAt: number;
+}
+
+export interface SyncMergeResult {
+  added: number;
+  modified: number;
+  conflicts: Array<{ id: string; kind: 'requirement' | 'version' }>;
+}
+
+export interface SyncHistoryEntry {
+  id: string;
+  projectId: string;
+  type: 'push' | 'pull' | 'merge' | 'receive';
+  status: 'success' | 'failed';
+  dataVersion: string;
+  remoteUrl: string | null;
+  added: number;
+  modified: number;
+  deleted: number;
+  conflictCount: number;
+  message: string | null;
+  createdAt: number;
+}
+
+function hashPayload(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 8);
 }
 
 export class AppDatabase {
@@ -87,6 +121,21 @@ export class AppDatabase {
         updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_ai_reviews_requirement ON ai_reviews(requirement_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS sync_history (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        data_version TEXT NOT NULL,
+        remote_url TEXT,
+        added INTEGER NOT NULL DEFAULT 0,
+        modified INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        conflict_count INTEGER NOT NULL DEFAULT 0,
+        message TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_sync_history_project ON sync_history(project_id, created_at DESC);
     `);
     const migration = this.db.prepare('SELECT version FROM schema_migrations WHERE version = 1').get();
     if (!migration) {
@@ -267,6 +316,142 @@ export class AppDatabase {
     this.db.prepare(`INSERT INTO metadata(key, value_json, updated_at) VALUES(?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`)
       .run(key, JSON.stringify(value), Date.now());
+  }
+
+  /* ========== Cloud Sync (v0.2.0) ========== */
+
+  /** Export a single project's slice of data (project meta + versions + requirements) with a content hash. */
+  exportProjectPayload(projectId: string): ProjectSyncPayload {
+    const { data } = this.load();
+    const project = data.projects.find((p) => p.id === projectId) ?? null;
+    const versions = data.versions.filter((v) => v.projectId === projectId);
+    const requirements = data.requirements.filter((r) => r.projectId === projectId);
+    const dataVersion = hashPayload({ versions, requirements });
+    return { projectId, project, versions, requirements, dataVersion, exportedAt: Date.now() };
+  }
+
+  /** Lightweight version hash for a project, without shipping the full payload. */
+  computeProjectVersion(projectId: string): { dataVersion: string; requirementCount: number; versionCount: number } {
+    const payload = this.exportProjectPayload(projectId);
+    return { dataVersion: payload.dataVersion, requirementCount: payload.requirements.length, versionCount: payload.versions.length };
+  }
+
+  /**
+   * Merge an incoming project payload (from a remote HubPooL instance) into the local database.
+   * mode 'overwrite'    -> incoming always wins (used when a remote instance pushes data to us).
+   * mode 'preferNewer'  -> the copy with the greater updatedAt/createdAt/exportedAt wins; ties keep local and are reported as conflicts.
+   */
+  mergeIncomingProject(
+    projectId: string,
+    incoming: { project?: Project | null; versions?: Version[]; requirements?: Requirement[]; exportedAt?: number },
+    mode: 'overwrite' | 'preferNewer',
+  ): SyncMergeResult {
+    const { data } = this.load();
+    const result: SyncMergeResult = { added: 0, modified: 0, conflicts: [] };
+
+    // --- Requirements ---
+    const otherReqs = data.requirements.filter((r) => r.projectId !== projectId);
+    const localReqById = new Map(data.requirements.filter((r) => r.projectId === projectId).map((r) => [r.id, r]));
+    for (const incomingReq of incoming.requirements ?? []) {
+      const existing = localReqById.get(incomingReq.id);
+      if (!existing) {
+        localReqById.set(incomingReq.id, incomingReq);
+        result.added += 1;
+        continue;
+      }
+      if (JSON.stringify(existing) === JSON.stringify(incomingReq)) continue;
+      if (mode === 'overwrite') {
+        localReqById.set(incomingReq.id, incomingReq);
+        result.modified += 1;
+        continue;
+      }
+      const existingTs = Number(existing.updatedAt ?? existing.createdAt ?? 0);
+      const incomingTs = Number(incomingReq.updatedAt ?? incomingReq.createdAt ?? incoming.exportedAt ?? 0);
+      if (incomingTs > existingTs) {
+        localReqById.set(incomingReq.id, incomingReq);
+        result.modified += 1;
+      } else {
+        result.conflicts.push({ id: incomingReq.id, kind: 'requirement' });
+      }
+    }
+
+    // --- Versions (simpler: same rules, no detailed conflict tracking beyond the list) ---
+    const otherVersions = data.versions.filter((v) => v.projectId !== projectId);
+    const localVerById = new Map(data.versions.filter((v) => v.projectId === projectId).map((v) => [v.id, v]));
+    for (const incomingVer of incoming.versions ?? []) {
+      const existing = localVerById.get(incomingVer.id);
+      if (!existing) {
+        localVerById.set(incomingVer.id, incomingVer);
+        continue;
+      }
+      if (JSON.stringify(existing) === JSON.stringify(incomingVer)) continue;
+      if (mode === 'overwrite') {
+        localVerById.set(incomingVer.id, incomingVer);
+        continue;
+      }
+      const existingTs = Number((existing as Record<string, unknown>).updatedAt ?? 0);
+      const incomingTs = Number((incomingVer as Record<string, unknown>).updatedAt ?? incoming.exportedAt ?? 0);
+      if (incomingTs > existingTs) localVerById.set(incomingVer.id, incomingVer);
+      else result.conflicts.push({ id: incomingVer.id, kind: 'version' });
+    }
+
+    // --- Project metadata: only adopt incoming project meta if we don't have one locally yet ---
+    const projects = data.projects.slice();
+    if (incoming.project && !projects.some((p) => p.id === projectId)) {
+      projects.push(incoming.project);
+    }
+
+    const next: AppData = {
+      ...data,
+      projects,
+      versions: [...otherVersions, ...Array.from(localVerById.values())],
+      requirements: [...otherReqs, ...Array.from(localReqById.values())],
+    };
+    this.replace(next);
+    return result;
+  }
+
+  recordSyncEvent(event: {
+    projectId: string;
+    type: SyncHistoryEntry['type'];
+    status: SyncHistoryEntry['status'];
+    dataVersion: string;
+    remoteUrl?: string | null;
+    added?: number;
+    modified?: number;
+    deleted?: number;
+    conflictCount?: number;
+    message?: string | null;
+  }): SyncHistoryEntry {
+    const entry: SyncHistoryEntry = {
+      id: randomUUID(),
+      projectId: event.projectId,
+      type: event.type,
+      status: event.status,
+      dataVersion: event.dataVersion,
+      remoteUrl: event.remoteUrl ?? null,
+      added: event.added ?? 0,
+      modified: event.modified ?? 0,
+      deleted: event.deleted ?? 0,
+      conflictCount: event.conflictCount ?? 0,
+      message: event.message ?? null,
+      createdAt: Date.now(),
+    };
+    this.db.prepare(`INSERT INTO sync_history(id, project_id, type, status, data_version, remote_url, added, modified, deleted, conflict_count, message, created_at)
+      VALUES(@id,@projectId,@type,@status,@dataVersion,@remoteUrl,@added,@modified,@deleted,@conflictCount,@message,@createdAt)`).run(entry as unknown as Record<string, string | number | bigint | null | Uint8Array>);
+    return entry;
+  }
+
+  listSyncHistory(projectId: string, limit = 20): SyncHistoryEntry[] {
+    const rows = this.db.prepare(`SELECT id, project_id AS projectId, type, status, data_version AS dataVersion,
+      remote_url AS remoteUrl, added, modified, deleted, conflict_count AS conflictCount, message, created_at AS createdAt
+      FROM sync_history WHERE project_id = ? ORDER BY created_at DESC LIMIT ?`).all(projectId, limit) as unknown as SyncHistoryEntry[];
+    return rows;
+  }
+
+  getLastSyncEvent(projectId: string): SyncHistoryEntry | null {
+    const rows = this.listSyncHistory(projectId, 1);
+    return rows[0] ?? null;
   }
 
   private snapshotLimit(data: AppData): number {

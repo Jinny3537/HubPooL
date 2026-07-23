@@ -44,7 +44,7 @@ export async function createServer(config: RuntimeConfig, database: AppDatabase)
     }
   });
 
-  app.get('/api/v1/health', async () => ({ status: 'ok', version: '1.0.0' }));
+  app.get('/api/v1/health', async () => ({ status: 'ok', version: '0.2.0' }));
 
   app.get('/api/v1/runtime', async () => ({
     host: config.host,
@@ -147,6 +147,177 @@ export async function createServer(config: RuntimeConfig, database: AppDatabase)
   app.post<{ Params: { id: string } }>('/api/v1/software/backups/:id/restore', async (request, reply) => {
     try { return await updater.restore(request.params.id); }
     catch (error) { return reply.code(400).send({ error: { code: 'RESTORE_FAILED', message: error instanceof Error ? error.message : '还原失败' } }); }
+  });
+
+  /* ========== Cloud Sync (v0.2.0) ==========
+   * Peer-to-peer sync between two running HubPooL instances (e.g. two teammates,
+   * each running their own local server). One side calls push/pull/merge with the
+   * other side's URL + access token; the other side exposes export/receive so the
+   * actual data transfer happens over real HTTP, backed by the SQLite database.
+   */
+  const syncFetchTimeoutMs = 15_000;
+
+  function normalizeRemoteUrl(raw: unknown): string {
+    const value = String(raw ?? '').trim();
+    if (!value) throw Object.assign(new Error('请填写远端服务器地址'), { code: 'VALIDATION_ERROR' });
+    let url: URL;
+    try { url = new URL(value); } catch { throw Object.assign(new Error('远端服务器地址格式不正确'), { code: 'VALIDATION_ERROR' }); }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw Object.assign(new Error('远端服务器地址必须以 http:// 或 https:// 开头'), { code: 'VALIDATION_ERROR' });
+    }
+    return url.origin;
+  }
+
+  async function remoteFetch(remoteUrl: string, path: string, remoteToken: string | undefined, init?: { method?: string; body?: unknown }) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), syncFetchTimeoutMs);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (remoteToken) headers.Authorization = `Bearer ${remoteToken}`;
+      const res = await fetch(`${remoteUrl}${path}`, {
+        method: init?.method ?? 'GET',
+        headers,
+        body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let json: unknown = undefined;
+      try { json = text ? JSON.parse(text) : undefined; } catch { /* non-JSON response */ }
+      if (!res.ok) {
+        const message = (json as { error?: { message?: string } } | undefined)?.error?.message ?? `远端服务器返回 ${res.status}`;
+        throw Object.assign(new Error(message), { code: 'REMOTE_ERROR' });
+      }
+      return json;
+    } catch (error) {
+      const err = error as Error & { code?: string; cause?: { code?: string } };
+      if (err.name === 'AbortError') throw Object.assign(new Error('连接远端服务器超时，请确认对方服务已启动且地址正确'), { code: 'REMOTE_TIMEOUT' });
+      if (err.code === 'REMOTE_ERROR') throw err;
+      const causeCode = err.cause?.code;
+      if (err.message === 'fetch failed' || causeCode === 'ECONNREFUSED' || causeCode === 'ENOTFOUND' || causeCode === 'EHOSTUNREACH') {
+        throw Object.assign(new Error('无法连接到远端服务器，请检查地址是否正确、对方 HubPooL 服务是否已启动'), { code: 'REMOTE_UNREACHABLE' });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Status: local data version + last sync record for a project.
+  app.get<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/sync/status', async (request) => {
+    const { projectId } = request.params;
+    const version = database.computeProjectVersion(projectId);
+    const lastSync = database.getLastSyncEvent(projectId);
+    return { projectId, ...version, lastSync };
+  });
+
+  // History: recent sync events for a project.
+  app.get<{ Params: { projectId: string }; Querystring: { limit?: string } }>('/api/v1/projects/:projectId/sync/history', async (request) => {
+    const { projectId } = request.params;
+    const limit = Math.min(100, Math.max(1, Number(request.query.limit ?? 20) || 20));
+    return { records: database.listSyncHistory(projectId, limit) };
+  });
+
+  // Export: lets a remote HubPooL instance pull this project's data from us.
+  app.get<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/sync/export', async (request) => {
+    return database.exportProjectPayload(request.params.projectId);
+  });
+
+  // Receive: lets a remote HubPooL instance push its project data into us.
+  app.post<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/sync/receive', async (request, reply) => {
+    const { projectId } = request.params;
+    const body = request.body as { project?: unknown; versions?: unknown; requirements?: unknown; exportedAt?: number; dataVersion?: string };
+    if (!Array.isArray(body?.requirements) || !Array.isArray(body?.versions)) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: '同步数据格式不正确' } });
+    }
+    try {
+      const merged = database.mergeIncomingProject(projectId, {
+        project: (body.project ?? null) as never,
+        versions: body.versions as never,
+        requirements: body.requirements as never,
+        exportedAt: body.exportedAt,
+      }, 'overwrite');
+      const version = database.computeProjectVersion(projectId);
+      database.recordSyncEvent({ projectId, type: 'receive', status: 'success', dataVersion: version.dataVersion, added: merged.added, modified: merged.modified, conflictCount: merged.conflicts.length, message: '接收到远端推送' });
+      return { success: true, ...merged, dataVersion: version.dataVersion };
+    } catch (error) {
+      return reply.code(400).send({ error: { code: 'MERGE_FAILED', message: error instanceof Error ? error.message : '合并失败' } });
+    }
+  });
+
+  // Push: send our project data to a remote instance's /receive endpoint.
+  app.post<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/sync/push', async (request, reply) => {
+    const { projectId } = request.params;
+    const body = request.body as { remoteUrl?: string; remoteToken?: string };
+    try {
+      const remoteUrl = normalizeRemoteUrl(body.remoteUrl);
+      const payload = database.exportProjectPayload(projectId);
+      const result = await remoteFetch(remoteUrl, `/api/v1/projects/${encodeURIComponent(projectId)}/sync/receive`, body.remoteToken, { method: 'POST', body: payload }) as
+        { success: boolean; added: number; modified: number; conflicts: Array<{ id: string }>; dataVersion: string };
+      database.recordSyncEvent({ projectId, type: 'push', status: 'success', dataVersion: result.dataVersion ?? payload.dataVersion, remoteUrl, added: result.added, modified: result.modified, conflictCount: result.conflicts?.length ?? 0, message: '推送成功' });
+      return { success: true, remoteVersion: result.dataVersion ?? payload.dataVersion, changes: { added: result.added ?? 0, modified: result.modified ?? 0, deleted: 0 }, conflicts: result.conflicts ?? [], syncTime: Date.now() };
+    } catch (error) {
+      const coded = error as Error & { code?: string };
+      database.recordSyncEvent({ projectId, type: 'push', status: 'failed', dataVersion: database.computeProjectVersion(projectId).dataVersion, remoteUrl: body.remoteUrl ?? null, message: coded.message });
+      return reply.code(400).send({ error: { code: coded.code ?? 'PUSH_FAILED', message: coded.message ?? '推送失败' } });
+    }
+  });
+
+  // Pull: fetch a remote instance's project data via /export, merge into local DB (newer wins).
+  app.post<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/sync/pull', async (request, reply) => {
+    const { projectId } = request.params;
+    const body = request.body as { remoteUrl?: string; remoteToken?: string };
+    try {
+      const remoteUrl = normalizeRemoteUrl(body.remoteUrl);
+      const remoteData = await remoteFetch(remoteUrl, `/api/v1/projects/${encodeURIComponent(projectId)}/sync/export`, body.remoteToken) as
+        { project: unknown; versions: unknown[]; requirements: unknown[]; dataVersion: string; exportedAt: number };
+      const merged = database.mergeIncomingProject(projectId, {
+        project: remoteData.project as never,
+        versions: remoteData.versions as never,
+        requirements: remoteData.requirements as never,
+        exportedAt: remoteData.exportedAt,
+      }, 'preferNewer');
+      const version = database.computeProjectVersion(projectId);
+      database.recordSyncEvent({ projectId, type: 'pull', status: 'success', dataVersion: version.dataVersion, remoteUrl, added: merged.added, modified: merged.modified, conflictCount: merged.conflicts.length, message: '拉取成功' });
+      return { success: true, localVersion: version.dataVersion, changes: { added: merged.added, modified: merged.modified, deleted: 0 }, conflicts: merged.conflicts, data: database.exportProjectPayload(projectId), syncTime: Date.now() };
+    } catch (error) {
+      const coded = error as Error & { code?: string };
+      database.recordSyncEvent({ projectId, type: 'pull', status: 'failed', dataVersion: database.computeProjectVersion(projectId).dataVersion, remoteUrl: body.remoteUrl ?? null, message: coded.message });
+      return reply.code(400).send({ error: { code: coded.code ?? 'PULL_FAILED', message: coded.message ?? '拉取失败' } });
+    }
+  });
+
+  // Merge: two-way — pull remote data in with newer-wins, then push the reconciled result back out.
+  app.post<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/sync/merge', async (request, reply) => {
+    const { projectId } = request.params;
+    const body = request.body as { remoteUrl?: string; remoteToken?: string };
+    try {
+      const remoteUrl = normalizeRemoteUrl(body.remoteUrl);
+      const remoteData = await remoteFetch(remoteUrl, `/api/v1/projects/${encodeURIComponent(projectId)}/sync/export`, body.remoteToken) as
+        { project: unknown; versions: unknown[]; requirements: unknown[]; dataVersion: string; exportedAt: number };
+      const pullMerge = database.mergeIncomingProject(projectId, {
+        project: remoteData.project as never,
+        versions: remoteData.versions as never,
+        requirements: remoteData.requirements as never,
+        exportedAt: remoteData.exportedAt,
+      }, 'preferNewer');
+      const reconciled = database.exportProjectPayload(projectId);
+      const pushResult = await remoteFetch(remoteUrl, `/api/v1/projects/${encodeURIComponent(projectId)}/sync/receive`, body.remoteToken, { method: 'POST', body: reconciled }) as
+        { added: number; modified: number; conflicts: Array<{ id: string }> };
+      const conflictCount = pullMerge.conflicts.length + (pushResult.conflicts?.length ?? 0);
+      database.recordSyncEvent({ projectId, type: 'merge', status: 'success', dataVersion: reconciled.dataVersion, remoteUrl, added: pullMerge.added, modified: pullMerge.modified + (pushResult.modified ?? 0), conflictCount, message: '双向合并完成' });
+      return {
+        success: true,
+        mergedVersion: reconciled.dataVersion,
+        changes: { added: pullMerge.added, modified: pullMerge.modified, deleted: 0 },
+        conflicts: [...pullMerge.conflicts, ...(pushResult.conflicts ?? [])],
+        data: reconciled,
+        syncTime: Date.now(),
+      };
+    } catch (error) {
+      const coded = error as Error & { code?: string };
+      database.recordSyncEvent({ projectId, type: 'merge', status: 'failed', dataVersion: database.computeProjectVersion(projectId).dataVersion, remoteUrl: body.remoteUrl ?? null, message: coded.message });
+      return reply.code(400).send({ error: { code: coded.code ?? 'MERGE_FAILED', message: coded.message ?? '合并失败' } });
+    }
   });
 
   app.get('/api/v1/snapshots', async () => ({ snapshots: database.listSnapshots() }));

@@ -1,7 +1,7 @@
 {
-  "name": "requirement-pool-local",
-  "version": "1.0.0",
-  "description": "多项目需求池本地管理软件：CLI + 本地服务 + SQLite + 浏览器管理页",
+  "name": "hubpool",
+  "version": "0.2.0",
+  "description": "Cloud-enabled project & requirement hub - 云端协作的项目和需求中心",
   "type": "module",
   "bin": {
     "reqpool": "dist/cli.js"

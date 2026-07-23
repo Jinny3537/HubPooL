@@ -3,37 +3,81 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>多项目需求池管理工具 V1.3</title>
+<title>HubPooL - 项目与需求管理 v0.2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* ============================================
+     HubPooL Design System v1.0
+     Based on UI/UX Pro Max Framework
+     ============================================ */
   :root{
-    /* Soft UI Evolution · 专业蓝 + 行动绿 · 高密度 */
+    /* Primary Brand Colors */
     --primary:#2563eb;
+    --primary-light:#dbeafe;
     --primary-hover:#1d4ed8;
-    --primary-light:#eff6ff;
-    --accent:#059669;
-    --border:#e4ecfc;
-    --text:#0f172a;
-    --text-mid:#475569;
-    --text-light:#64748b;
-    --text-faint:#94a3b8;
+    --primary-active:#1e40af;
+
+    /* Semantic Colors */
+    --success:#16a34a;
+    --success-light:#dcfce7;
+    --warning:#ea580c;
+    --warning-light:#fed7aa;
+    --danger:#dc2626;
+    --danger-light:#fee2e2;
+
+    /* Neutral - Light Theme */
     --bg:#f8fafc;
     --card:#ffffff;
-    --muted:#f1f5fd;
-    --danger:#dc2626;
-    --success:#059669;
-    --warning:#d97706;
-    --radius:10px;
-    --radius-sm:7px;
-    --shadow-sm:0 1px 2px rgba(15,23,42,.05);
-    --shadow-md:0 2px 4px rgba(15,23,42,.05), 0 4px 12px rgba(37,99,235,.06);
-    --shadow-lg:0 4px 8px rgba(15,23,42,.06), 0 12px 32px rgba(37,99,235,.10);
-    --ring:0 0 0 3px rgba(37,99,235,.28);
-    --dur:200ms;
+    --muted:#f1f5f9;
+    --border:#e2e8f0;
+
+    /* Text Colors */
+    --text:#1e293b;
+    --text-mid:#64748b;
+    --text-light:#94a3b8;
+
+    /* Shadow System */
+    --shadow-sm:0 1px 2px rgba(15,23,42,0.05);
+    --shadow-md:0 4px 6px rgba(15,23,42,0.07);
+    --shadow-lg:0 10px 15px rgba(15,23,42,0.1);
+    --ring:0 0 0 3px rgba(37,99,235,0.1);
+
+    /* Spacing (8px Base) */
+    --space-xs:4px;
+    --space-sm:8px;
+    --space-md:12px;
+    --space-lg:16px;
+    --space-xl:24px;
+    --space-2xl:32px;
+
+    /* Border & Radius */
+    --radius-sm:5px;
+    --radius:8px;
+    --radius-lg:12px;
+    --radius-full:9999px;
+
+    /* Animation */
+    --duration-fast:100ms;
+    --duration-normal:200ms;
+    --duration-slow:300ms;
+    --ease-in:cubic-bezier(0.4,0,1,1);
+    --ease-out:cubic-bezier(0,0,0.2,1);
+    --ease-in-out:cubic-bezier(0.4,0,0.2,1);
+
+    /* Typography */
     --font-ui:"Fira Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --font-mono:"Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --font-normal:400;
+    --font-medium:500;
+    --font-semibold:600;
+    --font-bold:700;
+
+    /* Deprecated - kept for compatibility */
+    --text-faint:#94a3b8;
+    --accent:#16a34a;
+    --dur:200ms;
   }
   *{box-sizing:border-box;}
   body{
@@ -46,12 +90,15 @@
   }
   .app{display:flex;height:100vh;overflow:hidden;}
 
-  /* Sidebar */
+  /* ============================================
+     SIDEBAR
+     ============================================ */
   .sidebar{
-    width:220px;flex-shrink:0;background:var(--card);
+    width:228px;flex-shrink:0;background:var(--card);
     border-right:1px solid var(--border);
     display:flex;flex-direction:column;
     padding:16px 0;
+    box-shadow:var(--shadow-sm);
   }
   .sidebar h1{font-size:15px;padding:0 16px 12px;margin:0;border-bottom:1px solid var(--border);}
   .proj-list{flex:1;overflow-y:auto;padding:8px;}
@@ -94,23 +141,67 @@
   .banner.show{display:flex;}
   .banner .spacer{flex:1;}
 
+  /* ============================================
+     TOOLBAR & FORMS
+     ============================================ */
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   .toolbar select, .toolbar input[type=text]{
-    padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--card);color:var(--text);
+    padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    font-size:13px;background:var(--card);color:var(--text);
+    font-family:var(--font-ui);
+    transition:border-color var(--duration-normal),box-shadow var(--duration-normal);
+  }
+  .toolbar select:hover, .toolbar input[type=text]:hover{border-color:#c9d9f9;}
+  .toolbar select:focus, .toolbar input[type=text]:focus{
+    outline:none;border-color:var(--primary);box-shadow:var(--ring);
   }
   .toolbar input[type=text]{width:200px;}
   .spacer{flex:1;}
 
+  /* ============================================
+     BUTTON COMPONENTS
+     ============================================ */
   button{
-    font-family:inherit;cursor:pointer;border:none;border-radius:6px;
-    padding:8px 14px;font-size:13px;font-weight:500;transition:all .15s;
+    font-family:var(--font-ui);cursor:pointer;border:none;border-radius:var(--radius-sm);
+    padding:8px 12px;font-size:13px;font-weight:var(--font-semibold);
+    transition:background var(--duration-normal),box-shadow var(--duration-normal),
+               transform var(--duration-fast),color var(--duration-normal);
+    min-height:36px;display:inline-flex;align-items:center;justify-content:center;
   }
-  .btn-primary{background:var(--primary);color:#fff;}
-  .btn-primary:hover{background:#1d4ed8;}
-  .btn-secondary{background:var(--card);color:var(--text-mid);border:1px solid var(--border);}
-  .btn-secondary:hover{background:var(--bg);}
-  .btn-danger-text{background:transparent;color:var(--danger);padding:4px 8px;}
-  .btn-sm{padding:5px 10px;font-size:12px;}
+  button:focus-visible{outline:none;box-shadow:var(--ring);}
+
+  /* Primary Button */
+  .btn-primary{
+    background-color:var(--primary);color:#fff;
+    box-shadow:0 1px 2px rgba(37,99,235,0.35);
+  }
+  .btn-primary:hover{
+    background-color:var(--primary-hover);
+    box-shadow:0 2px 6px rgba(37,99,235,0.4);
+  }
+  .btn-primary:active{transform:translateY(1px);}
+  .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+
+  /* Secondary Button */
+  .btn-secondary{
+    background-color:var(--card);color:var(--text);
+    border:1px solid var(--border);box-shadow:var(--shadow-sm);
+  }
+  .btn-secondary:hover{
+    background-color:var(--muted);border-color:#c9d9f9;
+  }
+  .btn-secondary:active{transform:translateY(1px);}
+  .btn-secondary:disabled{opacity:0.5;cursor:not-allowed;}
+
+  /* Danger Button */
+  .btn-danger-text{
+    background:transparent;color:var(--danger);padding:4px 8px;
+    font-weight:var(--font-semibold);
+  }
+  .btn-danger-text:hover{background:var(--danger-light);}
+
+  /* Small Button */
+  .btn-sm{padding:5px 10px;font-size:12px;min-height:32px;}
 
   .content{flex:1;overflow:auto;padding:16px 20px;}
   table{width:100%;border-collapse:collapse;background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04);}
@@ -224,23 +315,53 @@
     align-items:center;justify-content:center;z-index:100;
   }
   .overlay.show{display:flex;}
+  /* ============================================
+     MODAL DIALOG
+     ============================================ */
   .modal{
-    background:var(--card);border-radius:12px;width:720px;max-width:92vw;
-    max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);
+    background:var(--card);border-radius:14px;width:720px;max-width:92vw;
+    max-height:88vh;display:flex;flex-direction:column;
+    box-shadow:0 8px 16px rgba(15,23,42,0.08),0 24px 64px rgba(15,23,42,0.22);
   }
-  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-  .modal-header h2{font-size:16px;margin:0;}
-  .modal-close{background:none;border:none;font-size:20px;color:var(--text-light);padding:2px 8px;}
+  .modal-header{
+    padding:16px 20px;border-bottom:1px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .modal-header h2{font-size:16px;margin:0;font-weight:var(--font-semibold);}
+  .modal-close{
+    background:none;border:none;font-size:20px;color:var(--text-light);
+    padding:2px 8px;cursor:pointer;border-radius:6px;
+    transition:background var(--duration-normal),color var(--duration-normal);
+  }
+  .modal-close:hover{background:var(--muted);color:var(--text);}
   .modal-body{padding:18px 20px;overflow-y:auto;}
-  .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+  .modal-footer{
+    padding:14px 20px;border-top:1px solid var(--border);
+    display:flex;justify-content:flex-end;gap:8px;
+  }
 
+  /* ============================================
+     FORM COMPONENTS
+     ============================================ */
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;}
   .form-field{display:flex;flex-direction:column;gap:4px;}
   .form-field.full{grid-column:1/-1;}
-  .form-field label{font-size:12.5px;color:var(--text-mid);font-weight:600;}
+  .form-field label{
+    font-size:12.5px;color:var(--text-mid);font-weight:var(--font-semibold);
+  }
   .form-field label .req-star{color:var(--danger);margin-left:2px;}
   .form-field input, .form-field select, .form-field textarea{
-    padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;color:var(--text);width:100%;
+    padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    font-size:13px;font-family:var(--font-ui);color:var(--text);width:100%;
+    transition:border-color var(--duration-normal),box-shadow var(--duration-normal);
+    background-color:var(--card);
+  }
+  .form-field input:hover, .form-field select:hover, .form-field textarea:hover{
+    border-color:#c9d9f9;
+  }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus{
+    outline:none;border-color:var(--primary);box-shadow:var(--ring);
+  }
   }
   .form-field textarea{resize:vertical;min-height:44px;}
   .hint{font-size:11.5px;color:var(--text-light);font-weight:400;margin-left:4px;}
@@ -410,10 +531,170 @@
   .diff-field{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;}
   .diff-field:last-child{border-bottom:0}.diff-old{color:#991b1b;background:#fef2f2;padding:6px;border-radius:5px}.diff-new{color:#166534;background:#f0fdf4;padding:6px;border-radius:5px;margin-top:4px}
 
-  /* 无障碍：减少动效 */
+  /* v0.2.0 同步动画 */
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .sync-spinner {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+  }
+  .sync-pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* ============================================
+     v0.2.0 · 版本信息与云同步面板（现代极简 + 线条图标）
+     ============================================ */
+  .version-panel{
+    margin:8px 8px 0;padding:12px;border-top:1px solid var(--border);
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
+  }
+  .version-panel__row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:4px 0;font-size:11.5px;
+  }
+  .version-panel__row--head{padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--border);}
+  .version-panel__brand{font-weight:var(--font-bold);font-size:13px;color:var(--text);letter-spacing:.2px;}
+  .version-panel__app-version{
+    font-family:var(--font-mono);font-size:10.5px;color:var(--primary);
+    background:var(--primary-light);padding:2px 7px;border-radius:var(--radius-full);font-weight:600;
+  }
+  .version-panel__label{color:var(--text-light);}
+  .version-panel__value{font-family:var(--font-mono);color:var(--text-mid);font-weight:600;font-size:11px;}
+  .version-panel__status{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:11px;}
+  .version-panel__dot{
+    width:7px;height:7px;border-radius:50%;background:var(--text-light);flex-shrink:0;display:inline-block;
+  }
+  .version-panel__status[data-state="synced"] .version-panel__dot{background:var(--success);}
+  .version-panel__status[data-state="synced"]{color:var(--success);}
+  .version-panel__status[data-state="pending"] .version-panel__dot{background:var(--warning);}
+  .version-panel__status[data-state="pending"]{color:var(--warning);}
+  .version-panel__status[data-state="conflict"] .version-panel__dot,
+  .version-panel__status[data-state="error"] .version-panel__dot{background:var(--danger);}
+  .version-panel__status[data-state="conflict"],
+  .version-panel__status[data-state="error"]{color:var(--danger);}
+  .version-panel__status[data-state="syncing"] .version-panel__dot{background:var(--primary);animation:pulse 1.2s ease-in-out infinite;}
+  .version-panel__status[data-state="syncing"]{color:var(--primary);}
+  .version-panel__status[data-state="idle"] .version-panel__dot{background:var(--text-light);}
+  .version-panel__status[data-state="idle"]{color:var(--text-light);}
+
+  .version-panel__actions{display:flex;gap:6px;margin-top:10px;}
+  .icon-btn{
+    flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    height:32px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    background:var(--card);color:var(--text-mid);font-size:11.5px;font-weight:600;
+    cursor:pointer;transition:background var(--duration-normal),border-color var(--duration-normal),color var(--duration-normal);
+  }
+  .icon-btn svg{width:14px;height:14px;flex-shrink:0;}
+  .icon-btn:hover:not(:disabled){background:var(--primary-light);border-color:#bfdbfe;color:var(--primary);}
+  .icon-btn:active:not(:disabled){transform:translateY(1px);}
+  .icon-btn:disabled{opacity:.45;cursor:not-allowed;}
+  .icon-btn--ghost{flex:0 0 32px;padding:0;}
+  .icon-btn--ghost span{display:none;}
+  .icon-btn.is-loading svg,.sync-mode-btn.is-loading svg{animation:spin .9s linear infinite;}
+
+  /* Sync center modal */
+  .sync-remote-row{display:flex;gap:8px;}
+  .sync-remote-row input{flex:1;}
+  .sync-mode-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .sync-mode-btn{
+    display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;
+    border:1px solid var(--border);border-radius:var(--radius);background:var(--card);
+    color:var(--text-mid);cursor:pointer;transition:all var(--duration-normal);font-size:12px;font-weight:600;
+  }
+  .sync-mode-btn svg{width:18px;height:18px;}
+  .sync-mode-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary);background:var(--primary-light);}
+  .sync-mode-btn:disabled{opacity:.45;cursor:not-allowed;}
+  .sync-history-item{
+    display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;
+  }
+  .sync-history-item:last-child{border-bottom:none;}
+  .sync-history-icon{
+    width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;background:var(--muted);color:var(--text-mid);
+  }
+  .sync-history-icon svg{width:12px;height:12px;}
+  .sync-history-icon.success{background:var(--success-light);color:var(--success);}
+  .sync-history-icon.failed{background:var(--danger-light);color:var(--danger);}
+  .sync-history-meta{color:var(--text-light);font-size:10.5px;margin-top:2px;}
+  .sync-empty-state{
+    display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 10px;color:var(--text-light);text-align:center;
+  }
+  .sync-empty-state svg{width:32px;height:32px;opacity:.5;}
+
+  /* ============================================
+     UTILITY CLASSES
+     ============================================ */
+  .mt-sm { margin-top: var(--space-sm); }
+  .mt-md { margin-top: var(--space-md); }
+  .mt-lg { margin-top: var(--space-lg); }
+
+  .mb-sm { margin-bottom: var(--space-sm); }
+  .mb-md { margin-bottom: var(--space-md); }
+  .mb-lg { margin-bottom: var(--space-lg); }
+
+  .p-sm { padding: var(--space-sm); }
+  .p-md { padding: var(--space-md); }
+  .p-lg { padding: var(--space-lg); }
+
+  .text-primary { color: var(--primary); }
+  .text-success { color: var(--success); }
+  .text-warning { color: var(--warning); }
+  .text-danger { color: var(--danger); }
+  .text-muted { color: var(--text-light); }
+
+  .font-semibold { font-weight: var(--font-semibold); }
+  .font-bold { font-weight: var(--font-bold); }
+
+  .gap-sm { gap: var(--space-sm); }
+  .gap-md { gap: var(--space-md); }
+  .gap-lg { gap: var(--space-lg); }
+
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+
+  .border { border: 1px solid var(--border); }
+  .rounded { border-radius: var(--radius); }
+  .shadow-sm { box-shadow: var(--shadow-sm); }
+  .shadow-md { box-shadow: var(--shadow-md); }
+  .shadow-lg { box-shadow: var(--shadow-lg); }
+
+  /* ============================================
+     ACCESSIBILITY
+     ============================================ */
+  /* Focus visible for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  /* Reduce motion for users who prefer it */
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important;}
     .kanban-card:hover,.version-card:hover,.btn-primary:active,.btn-secondary:active{transform:none;}
+  }
+
+  /* ============================================
+     RESPONSIVE DESIGN
+     ============================================ */
+  @media (max-width: 768px) {
+    body { font-size: var(--text-sm); }
+    h1 { font-size: var(--text-2xl); }
+    h2 { font-size: var(--text-xl); }
+    .card { border-radius: var(--radius); }
+    button { min-height: 44px; }
+  }
+
+  @media (max-width: 480px) {
+    body { font-size: var(--text-xs); }
+    button { width: 100%; min-height: 48px; }
+    input, select, textarea { font-size: 16px; }
   }
 </style>
 </head>
@@ -422,8 +703,42 @@
 <div class="app">
   <!-- Sidebar -->
   <div class="sidebar">
-    <h1><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>需求池</h1>
+    <h1><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>HubPooL</h1>
     <div class="proj-list" id="projList"></div>
+    <!-- v0.2.0 版本信息与云同步面板 -->
+    <div id="versionInfoPanel" class="version-panel">
+      <div class="version-panel__row version-panel__row--head">
+        <span class="version-panel__brand">HubPooL</span>
+        <span class="version-panel__app-version">v0.2.0</span>
+      </div>
+      <div class="version-panel__row">
+        <span class="version-panel__label">数据版本</span>
+        <span class="version-panel__value" id="dataVersionDisplay">–</span>
+      </div>
+      <div class="version-panel__row">
+        <span class="version-panel__label">最后同步</span>
+        <span class="version-panel__value" id="lastSyncDisplay">从未同步</span>
+      </div>
+      <div class="version-panel__row">
+        <span class="version-panel__label">状态</span>
+        <span class="version-panel__status" id="syncStatusChip" data-state="idle">
+          <i class="version-panel__dot"></i><span id="syncStatusText">未选择项目</span>
+        </span>
+      </div>
+      <div class="version-panel__actions">
+        <button class="icon-btn" id="pullBtn" title="拉取远端最新数据" aria-label="拉取" onclick="pullLatestData()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m6 11 6 6 6-6"/><path d="M5 21h14"/></svg>
+          <span>拉取</span>
+        </button>
+        <button class="icon-btn" id="syncBtn" title="推送本地数据到远端" aria-label="同步" onclick="syncCurrentProject()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 12.5a9 9 0 0 1 15-6.7l3 3.2"/><path d="m7 21.9-4-3.9 4-3.9"/><path d="M21 11.5a9 9 0 0 1-15 6.7L3 15"/></svg>
+          <span>同步</span>
+        </button>
+        <button class="icon-btn icon-btn--ghost" id="syncCenterBtn" title="云同步中心" aria-label="云同步设置" onclick="openCloudSyncModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
     <div class="sidebar-actions">
       <!-- V1.3：跨项目查重扫描暂时隐藏，保留底层能力便于后续重新启用 -->
       <button class="btn-secondary" onclick="openProjectModal()">+ 新建项目</button>
@@ -1350,12 +1665,14 @@ function applyStage(r, stage, note){
   r.stage=stage;
   r.status=STAGE_TO_STATUS[stage];
   r.stageEnteredAt=Date.now();
+  r.updatedAt=Date.now(); // v0.2.0: 云同步依据此字段做“更新时间更新者胜出”的冲突判定
   if(!r.stageHistory) r.stageHistory=[];
   r.stageHistory.push({stage, at:todayStr(), note:note||''});
 }
 function markTerminal(r, status, note){
   r.status=status;
   r.stageEnteredAt=Date.now();
+  r.updatedAt=Date.now();
   if(!r.stageHistory) r.stageHistory=[];
   r.stageHistory.push({stage:status, at:todayStr(), note:note||''});
 }
@@ -1546,6 +1863,14 @@ function daysOverdue(r){
 }
 
 /* ---------- Sidebar / Projects ---------- */
+function updateSyncButtonVisibility(){
+  const syncBtn=document.getElementById('syncBtn');
+  const pullBtn=document.getElementById('pullBtn');
+  const hasProject=currentProjectId && currentProjectId!=='all';
+  if(syncBtn) syncBtn.disabled=!hasProject;
+  if(pullBtn) pullBtn.disabled=!hasProject;
+  refreshSyncStatus();
+}
 function renderSidebar(){
   const list=document.getElementById('projList');
   let html='';
@@ -1570,6 +1895,7 @@ function selectProject(id){
   if(sa) sa.checked=false;
   updateBatchBar();
   renderSidebar();
+  updateSyncButtonVisibility();
   populateVersionFilter();
   render();
 }
@@ -2168,7 +2494,7 @@ function applyBatchVersion(){
     if(!r) return;
     if(r.projectId!==v.projectId){ skipped++; return; }
     logScopeChange(r.versionId, versionId, r.id, '批量加入');
-    r.versionId=versionId; n++;
+    r.versionId=versionId; r.updatedAt=Date.now(); n++;
   });
   save();
   selectedReqIds.clear();
@@ -3576,6 +3902,7 @@ function saveReq(){
     ensureStage(r);
     const oldStage=r.stage, oldStatus=r.status, oldVersionId=r.versionId||null;
     Object.assign(r, fields);
+    r.updatedAt=Date.now(); // v0.2.0: 云同步冲突判定依据
     if((fields.versionId||null)!==oldVersionId) logScopeChange(oldVersionId, fields.versionId||null, r.id, '表单修改');
     r.stage=oldStage; // 阶段/状态联动由下方统一处理
     if(formStage!==oldStage){
@@ -3605,7 +3932,7 @@ function saveReq(){
     const yyyymm = ''+now.getFullYear()+String(now.getMonth()+1).padStart(2,'0');
     const seq=nextSeq(proj.code, yyyymm);
     const id=`REQ-${proj.code}-${yyyymm}-${seq}`;
-    const newReq = Object.assign({id, createdAt: Date.now()}, fields);
+    const newReq = Object.assign({id, createdAt: Date.now(), updatedAt: Date.now()}, fields);
     newReq.stage=formStage;
     if(newReq.status!=='挂起' && newReq.status!=='已拒绝'){
       newReq.status=STAGE_TO_STATUS[formStage];
@@ -4403,6 +4730,206 @@ function importJSON(evt){
   evt.target.value='';
 }
 
+/* ========== v0.2.0 · 版本信息与真实云同步 ==========
+ * 与旧版不同：这里不再用 setTimeout 模拟进度条，而是真实调用后端
+ * /api/v1/projects/:id/sync/(status|push|pull|merge|history) 接口，
+ * 后端再通过真实 HTTP 请求对接另一台正在运行的 HubPooL 服务，
+ * 数据落地在双方各自的 SQLite 中。
+ */
+const VERSION_INFO = { appVersion: 'v0.2.0', buildNumber: '202607-001', appName: 'HubPooL' };
+const SYNC_REMOTE_URL_KEY = 'hubpool_remoteUrl';
+const SYNC_REMOTE_TOKEN_KEY = 'hubpool_remoteToken';
+const SYNC_TYPE_LABEL = { push: '推送', pull: '拉取', merge: '合并', receive: '接收推送' };
+let syncInFlight = false;
+
+function getCurrentProjectId(){ return currentProjectId; }
+
+function getSyncRemoteConfig(){
+  return {
+    remoteUrl: (localStorage.getItem(SYNC_REMOTE_URL_KEY) || '').trim(),
+    remoteToken: (localStorage.getItem(SYNC_REMOTE_TOKEN_KEY) || '').trim(),
+  };
+}
+function saveSyncRemoteConfig(remoteUrl, remoteToken){
+  localStorage.setItem(SYNC_REMOTE_URL_KEY, remoteUrl || '');
+  localStorage.setItem(SYNC_REMOTE_TOKEN_KEY, remoteToken || '');
+}
+function onSyncRemoteConfigChange(){
+  const url=(document.getElementById('syncRemoteUrl')?.value || '').trim();
+  const token=(document.getElementById('syncRemoteToken')?.value || '').trim();
+  saveSyncRemoteConfig(url, token);
+  const statusEl=document.getElementById('syncStatus');
+  if(statusEl) statusEl.textContent = url ? '准备就绪，可以开始同步' : '请先填写远端服务器地址';
+}
+
+function initializeVersionInfo(){
+  const el=document.getElementById('dataVersionDisplay');
+  if(el) el.textContent='–';
+}
+
+function formatRelativeTime(ts){
+  if(!ts) return '从未同步';
+  const diff=Date.now()-ts;
+  if(diff<60000) return '刚刚';
+  if(diff<3600000) return Math.floor(diff/60000)+' 分钟前';
+  if(diff<86400000) return Math.floor(diff/3600000)+' 小时前';
+  const d=new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function setSyncStatusChip(state, text){
+  const chip=document.getElementById('syncStatusChip');
+  const label=document.getElementById('syncStatusText');
+  if(chip) chip.dataset.state=state;
+  if(label) label.textContent=text;
+}
+
+async function refreshSyncStatus(){
+  const projectId=getCurrentProjectId();
+  const dataVerEl=document.getElementById('dataVersionDisplay');
+  const syncTimeEl=document.getElementById('lastSyncDisplay');
+  if(!projectId || projectId==='all'){
+    if(dataVerEl) dataVerEl.textContent='–';
+    if(syncTimeEl) syncTimeEl.textContent='—';
+    setSyncStatusChip('idle','未选择项目');
+    return;
+  }
+  try{
+    const res=await apiFetch(`/api/v1/projects/${encodeURIComponent(projectId)}/sync/status`);
+    if(!res.ok) throw new Error('状态获取失败');
+    const status=await res.json();
+    if(dataVerEl) dataVerEl.textContent=status.dataVersion || '–';
+    const { remoteUrl } = getSyncRemoteConfig();
+    if(status.lastSync){
+      if(syncTimeEl) syncTimeEl.textContent=formatRelativeTime(status.lastSync.createdAt);
+      if(status.lastSync.status==='failed') setSyncStatusChip('error','上次同步失败');
+      else if(status.lastSync.conflictCount>0) setSyncStatusChip('conflict', `${status.lastSync.conflictCount} 处冲突待处理`);
+      else if(status.lastSync.dataVersion===status.dataVersion) setSyncStatusChip('synced','已同步');
+      else setSyncStatusChip('pending','本地有未同步的修改');
+    } else {
+      if(syncTimeEl) syncTimeEl.textContent='从未同步';
+      setSyncStatusChip(remoteUrl?'pending':'idle', remoteUrl?'尚未进行首次同步':'未配置远端服务器');
+    }
+  }catch(err){
+    if(dataVerEl) dataVerEl.textContent='–';
+    setSyncStatusChip('error','状态获取失败');
+  }
+}
+
+function syncHistoryIconPath(type){
+  if(type==='push') return '<path d="M12 21V8"/><path d="m6 13 6-6 6 6"/><path d="M5 3h14"/>';
+  if(type==='merge') return '<path d="M17 2.1 21 6l-4 3.9"/><path d="M3 12.5a9 9 0 0 1 15-6.7l3 3.2"/><path d="m7 21.9-4-3.9 4-3.9"/><path d="M21 11.5a9 9 0 0 1-15 6.7L3 15"/>';
+  return '<path d="M12 3v13"/><path d="m6 11 6 6 6-6"/><path d="M5 21h14"/>'; // pull / receive
+}
+
+async function loadSyncHistory(projectId){
+  const listEl=document.getElementById('syncHistoryList');
+  if(!listEl) return;
+  if(!projectId || projectId==='all'){
+    listEl.innerHTML=`<div class="sync-empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg><span>请先在左侧选择一个项目</span></div>`;
+    return;
+  }
+  try{
+    const res=await apiFetch(`/api/v1/projects/${encodeURIComponent(projectId)}/sync/history?limit=15`);
+    if(!res.ok) throw new Error();
+    const { records } = await res.json();
+    if(!records.length){
+      listEl.innerHTML=`<div class="sync-empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg><span>还没有同步记录，选择上方的同步方式开始</span></div>`;
+      return;
+    }
+    listEl.innerHTML=records.map(r=>`
+      <div class="sync-history-item">
+        <span class="sync-history-icon ${r.status}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${syncHistoryIconPath(r.type)}</svg></span>
+        <div style="flex:1;">
+          <div><b>${escapeHtml(SYNC_TYPE_LABEL[r.type]||r.type)}</b> · ${r.status==='success'?'成功':'失败'}${r.conflictCount?` · ${r.conflictCount} 处冲突`:''}</div>
+          <div class="sync-history-meta">${new Date(r.createdAt).toLocaleString()} · +${r.added} 新增 / ${r.modified} 更新${r.message?' · '+escapeHtml(r.message):''}</div>
+        </div>
+      </div>`).join('');
+  }catch(err){
+    listEl.innerHTML=`<div class="sync-empty-state"><span>同步历史加载失败</span></div>`;
+  }
+}
+
+function openCloudSyncModal(){
+  const projectId=getCurrentProjectId();
+  if(!projectId || projectId==='all'){ toast('请先在左侧选择一个项目'); return; }
+  const proj=projectById(projectId);
+  document.getElementById('syncModalTitle').textContent=`云同步中心 · ${proj?proj.name:''}`;
+  const { remoteUrl, remoteToken } = getSyncRemoteConfig();
+  document.getElementById('syncRemoteUrl').value=remoteUrl;
+  document.getElementById('syncRemoteToken').value=remoteToken;
+  document.getElementById('syncStatus').textContent = remoteUrl ? '准备就绪，可以开始同步' : '请先填写远端服务器地址';
+  document.getElementById('cloudSyncOverlay').classList.add('show');
+  loadSyncHistory(projectId);
+}
+function closeCloudSyncModal(){
+  document.getElementById('cloudSyncOverlay').classList.remove('show');
+}
+
+function setSyncButtonsLoading(loading){
+  const hasProject = !!(getCurrentProjectId() && getCurrentProjectId()!=='all');
+  ['pullBtn','syncBtn','syncModePull','syncModePush','syncModeMerge'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.classList.toggle('is-loading', loading);
+    el.disabled = loading || !hasProject;
+  });
+}
+
+async function performSync(mode){
+  const projectId=getCurrentProjectId();
+  if(!projectId || projectId==='all'){ toast('请先选择一个项目'); return; }
+  if(syncInFlight) return;
+  const { remoteUrl, remoteToken } = getSyncRemoteConfig();
+  if(!remoteUrl){
+    openCloudSyncModal();
+    toast('请先填写远端 HubPooL 服务器地址');
+    return;
+  }
+  syncInFlight=true;
+  setSyncButtonsLoading(true);
+  setSyncStatusChip('syncing', `正在${SYNC_TYPE_LABEL[mode]||mode}...`);
+  const statusEl=document.getElementById('syncStatus');
+  if(statusEl) statusEl.textContent=`${SYNC_TYPE_LABEL[mode]||mode}中，请稍候…`;
+
+  try{
+    const res=await apiFetch(`/api/v1/projects/${encodeURIComponent(projectId)}/sync/${mode}`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ remoteUrl, remoteToken: remoteToken || undefined }),
+    });
+    const result=await res.json();
+    if(!res.ok) throw new Error(result?.error?.message || '同步失败');
+
+    if(mode==='pull' || mode==='merge'){
+      // 后端已把远端数据合并进本地 SQLite；重新拉取完整数据以刷新前端内存态
+      await load();
+      renderSidebar();
+      populateProjectSelect();
+      populateVersionFilter();
+      render();
+      updateInboxBadge();
+    }
+
+    const changes=result.changes || { added:0, modified:0, deleted:0 };
+    const conflictCount=(result.conflicts||[]).length;
+    if(statusEl) statusEl.textContent=`${SYNC_TYPE_LABEL[mode]}完成：新增 ${changes.added} 条，更新 ${changes.modified} 条${conflictCount?`，${conflictCount} 处冲突已保留本地版本`:''}`;
+    toast(`${SYNC_TYPE_LABEL[mode]}成功：+${changes.added} / ~${changes.modified}${conflictCount?` / 冲突 ${conflictCount}`:''}`);
+    await refreshSyncStatus();
+    await loadSyncHistory(projectId);
+  }catch(err){
+    if(statusEl) statusEl.textContent=`${SYNC_TYPE_LABEL[mode]||mode}失败：${err.message}`;
+    setSyncStatusChip('error', `${SYNC_TYPE_LABEL[mode]||mode}失败`);
+    toast(`${SYNC_TYPE_LABEL[mode]||mode}失败：${err.message}`);
+    await loadSyncHistory(projectId);
+  }finally{
+    syncInFlight=false;
+    setSyncButtonsLoading(false);
+  }
+}
+
+function pullLatestData(){ performSync('pull'); }
+function syncCurrentProject(){ performSync('push'); }
+
 /* ---------- Init ---------- */
 function initFilterOptions(){
   const statusOpts=['待评审','评审通过','开发中','已上线','已拒绝','挂起'];
@@ -4418,7 +4945,9 @@ function initFilterOptions(){
 async function initApp(){
   await load();
   initFilterOptions();
+  initializeVersionInfo();
   renderSidebar();
+  updateSyncButtonVisibility();
   populateProjectSelect();
   populateVersionFilter();
   render();
@@ -4427,5 +4956,64 @@ async function initApp(){
 }
 initApp();
 </script>
+
+<!-- v0.2.0 Cloud Sync Center Modal -->
+<div class="overlay" id="cloudSyncOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="syncModalTitle">云同步中心</h2>
+      <button class="modal-close" onclick="closeCloudSyncModal()">×</button>
+    </div>
+    <div class="modal-body" style="max-height:66vh;overflow-y:auto;">
+
+      <div class="form-field full" style="margin-bottom:14px;">
+        <label>远端 HubPooL 服务器地址</label>
+        <div class="sync-remote-row">
+          <input type="text" id="syncRemoteUrl" placeholder="http://192.168.1.10:8080" oninput="onSyncRemoteConfigChange()">
+        </div>
+        <span class="hint" style="display:block;margin-top:4px;">填写队友正在运行的 HubPooL 地址。两边都需要打开各自的 HubPooL 服务。</span>
+      </div>
+
+      <div class="form-field full" style="margin-bottom:16px;">
+        <label>访问令牌 <span class="hint">（对方开启局域网访问时需要，见对方「系统设置 → 网络」）</span></label>
+        <input type="text" id="syncRemoteToken" placeholder="访问令牌（可选）" oninput="onSyncRemoteConfigChange()">
+      </div>
+
+      <div class="form-field full" style="margin-bottom:16px;">
+        <label>同步方式</label>
+        <div class="sync-mode-grid">
+          <button class="sync-mode-btn" id="syncModePull" onclick="performSync('pull')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m6 11 6 6 6-6"/><path d="M5 21h14"/></svg>
+            拉取
+          </button>
+          <button class="sync-mode-btn" id="syncModePush" onclick="performSync('push')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V8"/><path d="m6 13 6-6 6 6"/><path d="M5 3h14"/></svg>
+            推送
+          </button>
+          <button class="sync-mode-btn" id="syncModeMerge" onclick="performSync('merge')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 12.5a9 9 0 0 1 15-6.7l3 3.2"/><path d="m7 21.9-4-3.9 4-3.9"/><path d="M21 11.5a9 9 0 0 1-15 6.7L3 15"/></svg>
+            合并
+          </button>
+        </div>
+      </div>
+
+      <div class="form-field full" style="margin-bottom:16px;">
+        <label>状态</label>
+        <div id="syncStatus" style="padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-mid);line-height:1.6;">
+          尚未开始同步
+        </div>
+      </div>
+
+      <div class="form-field full">
+        <label>同步历史</label>
+        <div id="syncHistoryList"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeCloudSyncModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
