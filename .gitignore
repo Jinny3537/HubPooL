@@ -52,3 +52,29 @@ Thumbs.db
 .vscode
 .envrc
 .direnv
+mcp-bin/
+
+# 业务数据备份与日志（含真实需求池数据，禁止提交到公开仓库）
+需求池-备份*.json
+需求池启动日志.txt
+构建日志.txt
+
+# 临时测试脚本
+.tmp_test_*.mjs
+
+# 调试/探测脚本与输出
+list-mcp-tools.mjs
+probe-*.mjs
+tools-list.txt
+
+# 备份文件
+*.bak*
+*.bak
+*.mono-bak
+index.html.bak-ui
+
+# 误创建的空文件
+取消
+
+# 沙箱/挂载产生的临时文件
+.fuse_hidden*

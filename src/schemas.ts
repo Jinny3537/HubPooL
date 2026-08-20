@@ -28,6 +28,12 @@ export const versionSchema = z.object({
   projectId: z.string().min(1).max(100),
   name: z.string().min(1).max(100),
   status: z.string().min(1).max(30),
+  goal: z.string().max(1000).optional(),
+  owner: z.string().max(80).optional(),
+  riskLevel: z.enum(['low', 'medium', 'high']).optional(),
+  risks: z.array(z.string().max(300)).max(50).optional(),
+  signoffs: z.record(z.string(), z.string().max(80)).optional(),
+  releaseNotes: z.string().max(50_000).optional(),
 }).passthrough();
 
 export const requirementSchema = z.object({
@@ -58,3 +64,11 @@ export const snapshotCreateSchema = z.object({
 });
 
 export const settingsPatchSchema = z.record(z.string(), z.unknown());
+
+export const operationLogCreateSchema = z.object({
+  type: z.string().min(1).max(80),
+  actor: z.string().min(1).max(80).default('本地用户'),
+  targetType: z.string().min(1).max(80),
+  targetId: z.string().max(150).nullable().optional(),
+  summary: z.string().min(1).max(500),
+});

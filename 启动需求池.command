@@ -7,7 +7,7 @@
 SCRIPT_DIR="${0:A:h}"
 LOG_FILE="$SCRIPT_DIR/需求池启动日志.txt"
 DATA_DIR="$HOME/Library/Application Support/requirement-pool-local"
-HOST="${REQPOOL_HOST:-127.0.0.1}"
+HOST="${REQPOOL_HOST:-}"
 PORT="${REQPOOL_PORT:-8080}"
 
 exec > >(tee -a "$LOG_FILE") 2>&1
@@ -60,7 +60,7 @@ echo "时间：$(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "脚本：$0"
 echo "项目目录：$SCRIPT_DIR"
 echo "数据目录：$DATA_DIR"
-echo "监听地址：$HOST:$PORT"
+echo "监听地址：${HOST:-（按系统设置决定）}　端口：$PORT"
 echo "PATH：$PATH"
 echo "Node.js：$(command_version node)"
 echo "npm：$(command_version npm)"
@@ -146,8 +146,13 @@ echo "SQLite 数据目录：$DATA_DIR"
 echo "请保持本窗口开启；按 Control-C 可停止服务。"
 echo
 
+# 仅在显式设置 REQPOOL_HOST 时传 --host；否则交给 CLI 读取数据库里的系统设置，
+# 这样 UI 中配置的「允许局域网设备访问 + 0.0.0.0」重启后才会真正生效。
+HOST_ARGS=()
+[[ -n "$HOST" ]] && HOST_ARGS=(--host "$HOST")
+
 node "$SCRIPT_DIR/dist/cli.js" start \
-  --host "$HOST" \
+  "${HOST_ARGS[@]}" \
   --port "$PORT" \
   --data-dir "$DATA_DIR" \
   --open
